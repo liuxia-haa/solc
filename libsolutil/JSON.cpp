@@ -125,6 +125,7 @@ string jsonCompactPrint(Json::Value const& _input)
 
 string jsonPrint(Json::Value const& _input, JsonFormat const& _format)
 {
+//    std::cout<<"this is jsonPrint";
 	map<string, Json::Value> settings;
 	if (_format.format == JsonFormat::Pretty)
 	{
@@ -137,7 +138,8 @@ string jsonPrint(Json::Value const& _input, JsonFormat const& _format)
 	string result = print(_input, writerBuilder);
 	if (_format.format == JsonFormat::Pretty)
 		boost::replace_all(result, " \n", "\n");
-	return result;
+//	return result;
+    return "";
 }
 
 bool jsonParseStrict(string const& _input, Json::Value& _json, string* _errs /* = nullptr */)

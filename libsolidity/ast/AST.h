@@ -161,6 +161,7 @@ public:
  */
 class SourceUnit: public ASTNode, public ScopeOpener
 {
+    //构造函数
 public:
 	SourceUnit(
 		int64_t _id,
@@ -776,14 +777,17 @@ public:
 		SourceLocation const& _location,
 		std::vector<ASTPointer<VariableDeclaration>> _parameters
 	):
-		ASTNode(_id, _location), m_parameters(std::move(_parameters)) {}
+		ASTNode(_id, _location), m_parameters(std::move(_parameters)){}
 	void accept(ASTVisitor& _visitor) override;
 	void accept(ASTConstVisitor& _visitor) const override;
+    std::string get_type_information() const {return type_information;}
+    void set_type_information (std::string info) {type_information = info;}
 
 	std::vector<ASTPointer<VariableDeclaration>> const& parameters() const { return m_parameters; }
 
 private:
 	std::vector<ASTPointer<VariableDeclaration>> m_parameters;
+    std::string type_information;//标识种类，参数列表的种类
 };
 
 /**
@@ -815,9 +819,19 @@ public:
 	std::vector<ASTPointer<VariableDeclaration>> const& parameters() const { return m_parameters->parameters(); }
 	ASTPointer<OverrideSpecifier> const& overrides() const { return m_overrides; }
 	std::vector<ASTPointer<VariableDeclaration>> const& returnParameters() const { return m_returnParameters->parameters(); }
-	ParameterList const& parameterList() const { return *m_parameters; }
-	ASTPointer<ParameterList> const& returnParameterList() const { return m_returnParameters; }
-	bool markedVirtual() const { return m_isVirtual; }
+
+
+    ParameterList const& parameterList() const {
+//        std::cout<<"this is Callabledefiniton parameterList!!\n";//调用了该函数
+        m_parameters->set_type_information("parameterList");
+        return *m_parameters; }
+	ASTPointer<ParameterList> const& returnParameterList() const {
+        m_returnParameters->set_type_information("return_parameters");
+//        std::cout<<"this is Callabledefiniton Return_parameterList!!\n";//调用了该函数
+        return m_returnParameters; }
+
+
+    bool markedVirtual() const { return m_isVirtual; }
 	virtual bool virtualSemantics() const { return markedVirtual(); }
 
 	CallableDeclarationAnnotation& annotation() const override = 0;
@@ -883,9 +897,9 @@ public:
 		bool _isVirtual,
 		ASTPointer<OverrideSpecifier> const& _overrides,
 		ASTPointer<StructuredDocumentation> const& _documentation,
-		ASTPointer<ParameterList> const& _parameters,
+		ASTPointer<ParameterList> const& _parameters, //类型指针
 		std::vector<ASTPointer<ModifierInvocation>> _modifiers,
-		ASTPointer<ParameterList> const& _returnParameters,
+		ASTPointer<ParameterList> const& _returnParameters, //指针
 		ASTPointer<Block> const& _body
 	):
 		CallableDeclaration(_id, _location, _name, std::move(_nameLocation), _visibility, _parameters, _isVirtual, _overrides, _returnParameters),
@@ -973,6 +987,10 @@ class VariableDeclaration: public Declaration, public StructurallyDocumented
 public:
 	enum Location { Unspecified, Storage, Memory, CallData };
 	enum class Mutability { Mutable, Immutable, Constant };
+
+    std::string get_variable_type_information() const {return information;}//自己定义
+    void set_variable_type_information (std::string info){information = info;}//自己定义
+
 	static std::string mutabilityToString(Mutability _mutability)
 	{
 		switch (_mutability)
@@ -1014,7 +1032,11 @@ public:
 	void accept(ASTVisitor& _visitor) override;
 	void accept(ASTConstVisitor& _visitor) const override;
 
-	TypeName const& typeName() const { return *m_typeName; }
+	TypeName const& typeName() const {
+        return *m_typeName; }
+
+    ASTPointer<TypeName> const typeNamePtr() const {
+        return m_typeName;}
 	ASTPointer<Expression> const& value() const { return m_value; }
 
 	bool isLValue() const override;
@@ -1070,10 +1092,14 @@ public:
 
 	VariableDeclarationAnnotation& annotation() const override;
 
+
+
+
 protected:
 	Visibility defaultVisibility() const override { return Visibility::Internal; }
 
 private:
+    std::string information;
 	ASTPointer<TypeName> m_typeName;
 	/// Initially assigned value, can be missing. For local variables, this is stored inside
 	/// VariableDeclarationStatement and not here.
@@ -1286,18 +1312,37 @@ private:
  */
 class TypeName: public ASTNode
 {
+
 protected:
 	explicit TypeName(int64_t _id, SourceLocation const& _location): ASTNode(_id, _location) {}
 
 public:
-	TypeNameAnnotation& annotation() const override;
+    std::string typename_information;
+    std::string get_typename_information() const {return typename_information;}//自己定义
+    void set_typename_information (std::string info){ typename_information = info;}//自己定义
+    TypeNameAnnotation& annotation() const override;
+
 };
+
+
+
+//class TypeName_new: public ASTNode
+//{
+//protected:
+//    explicit TypeName_new(int64_t _id, SourceLocation const& _location): ASTNode(_id, _location) {}
+//
+//public:
+//    std::string typename_information;
+//    std::string get_typename_information() const {return typename_information;}//自己定义
+//    void set_typename_information (std::string info)  { typename_information = info;}//自己定义
+//    TypeNameAnnotation& annotation() const override;
+//};
 
 /**
  * Any pre-defined type name represented by a single keyword (and possibly a state mutability for address types),
  * i.e. it excludes mappings, contracts, functions, etc.
  */
-class ElementaryTypeName: public TypeName
+class ElementaryTypeName: public TypeName //原本是继承自TypeName 新创建了一个一样的TypeName_new
 {
 public:
 	ElementaryTypeName(
@@ -1313,11 +1358,14 @@ public:
 	void accept(ASTVisitor& _visitor) override;
 	void accept(ASTConstVisitor& _visitor) const override;
 
-	ElementaryTypeNameToken const& typeName() const { return m_type; }
+    std::string get_typename_information() const {return typename_information;}//自己定义
+    void set_typename_information (std::string info) {typename_information = info;}//自己定义
 
+    ElementaryTypeNameToken const& typeName() const { return m_type; }
 	std::optional<StateMutability> const& stateMutability() const { return m_stateMutability; }
 
 private:
+//    std::string typename_information;
 	ElementaryTypeNameToken m_type;
 	std::optional<StateMutability> m_stateMutability; ///< state mutability for address type
 };
@@ -2040,6 +2088,7 @@ public:
 	void accept(ASTConstVisitor& _visitor) const override;
 
 	Expression const& leftExpression() const { return *m_left; }
+
 	Expression const& rightExpression() const { return *m_right; }
 	Token getOperator() const { return m_operator; }
 

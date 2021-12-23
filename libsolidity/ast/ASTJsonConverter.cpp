@@ -43,6 +43,9 @@
 #include <limits>
 #include <type_traits>
 #include <range/v3/view/map.hpp>
+#include <iostream>
+#include <string>
+//#include <typeinfo>
 
 using namespace std;
 using namespace solidity::langutil;
@@ -85,6 +88,7 @@ void ASTJsonConverter::setJsonNode(
 	initializer_list<pair<string, Json::Value>>&& _attributes
 )
 {
+    //默认生成json节点，就是node类型和名字，还有属性值
 	ASTJsonConverter::setJsonNode(
 		_node,
 		_nodeName,
@@ -201,11 +205,13 @@ Json::Value ASTJsonConverter::toJson(ASTNode const& _node)
 
 bool ASTJsonConverter::visit(SourceUnit const& _node)
 {
+//    std::cout<<toJson(_node.nodes())<<endl;
+    //该节点不需要输出任何信息
 	std::vector<pair<string, Json::Value>> attributes = {
-		make_pair("license", _node.licenseString() ? Json::Value(*_node.licenseString()) : Json::nullValue),
+            //attributes 是一个键值对，生成的是json
+		//make_pair("license", _node.licenseString() ? Json::Value(*_node.licenseString()) : Json::nullValue),//不影响结果
 		make_pair("nodes", toJson(_node.nodes()))
 	};
-
 	if (_node.annotation().exportedSymbols.set())
 	{
 		Json::Value exportedSymbols = Json::objectValue;
@@ -215,14 +221,10 @@ bool ASTJsonConverter::visit(SourceUnit const& _node)
 			for (Declaration const* overload: sym.second)
 				exportedSymbols[sym.first].append(nodeId(*overload));
 		}
-
-		attributes.emplace_back("exportedSymbols", exportedSymbols);
+		//attributes.emplace_back("exportedSymbols", exportedSymbols);
 	};
-
-	addIfSet(attributes, "absolutePath", _node.annotation().path);
-
+	//addIfSet(attributes, "absolutePath", _node.annotation().path);
 	setJsonNode(_node, "SourceUnit", std::move(attributes));
-
 	return false;
 }
 
@@ -231,9 +233,9 @@ bool ASTJsonConverter::visit(PragmaDirective const& _node)
 	Json::Value literals(Json::arrayValue);
 	for (auto const& literal: _node.literals())
 		literals.append(literal);
-	setJsonNode(_node, "PragmaDirective", {
-		make_pair("literals", std::move(literals))
-	});
+//	setJsonNode(_node, "PragmaDirective", {
+//		make_pair("literals", std::move(literals))//分解solidity头文件标识编译器类型
+//    });
 	return false;
 }
 
@@ -267,26 +269,29 @@ bool ASTJsonConverter::visit(ImportDirective const& _node)
 
 bool ASTJsonConverter::visit(ContractDefinition const& _node)
 {
+    //solidity 一个合约转换为一个F*中的module文件
+    std::cout<<"module "<<_node.name()<<endl;
 	std::vector<pair<string, Json::Value>> attributes = {
-		make_pair("name", _node.name()),
-		make_pair("nameLocation", sourceLocationToString(_node.nameLocation())),
-		make_pair("documentation", _node.documentation() ? toJson(*_node.documentation()) : Json::nullValue),
-		make_pair("contractKind", contractKind(_node.contractKind())),
-		make_pair("abstract", _node.abstract()),
-		make_pair("baseContracts", toJson(_node.baseContracts())),
-		make_pair("contractDependencies", getContainerIds(_node.annotation().contractDependencies | ranges::views::keys)),
-		make_pair("usedErrors", getContainerIds(_node.interfaceErrors(false))),
+		make_pair("name", _node.name()),//该name 可以直接转换为module Test
+        make_pair("F*", "module "+_node.name()),
+//		make_pair("nameLocation", sourceLocationToString(_node.nameLocation())),
+//		make_pair("documentation", _node.documentation() ? toJson(*_node.documentation()) : Json::nullValue),
+//		make_pair("contractKind", contractKind(_node.contractKind())),
+//		make_pair("abstract", _node.abstract()),//判断contract是否为抽象的
+//		make_pair("baseContracts", toJson(_node.baseContracts())),
+//		make_pair("contractDependencies", getContainerIds(_node.annotation().contractDependencies | ranges::views::keys)),
+//		make_pair("usedErrors", getContainerIds(_node.interfaceErrors(false))),
 		make_pair("nodes", toJson(_node.subNodes())),
-		make_pair("scope", idOrNull(_node.scope()))
+//		make_pair("scope", idOrNull(_node.scope()))
 	};
-	addIfSet(attributes, "canonicalName", _node.annotation().canonicalName);
+//	addIfSet(attributes, "canonicalName", _node.annotation().canonicalName);
 
-	if (_node.annotation().unimplementedDeclarations.has_value())
-		attributes.emplace_back("fullyImplemented", _node.annotation().unimplementedDeclarations->empty());
-	if (!_node.annotation().linearizedBaseContracts.empty())
-		attributes.emplace_back("linearizedBaseContracts", getContainerIds(_node.annotation().linearizedBaseContracts));
+//	if (_node.annotation().unimplementedDeclarations.has_value())
+//		attributes.emplace_back("fullyImplemented", _node.annotation().unimplementedDeclarations->empty());
+//	if (!_node.annotation().linearizedBaseContracts.empty())
+//		attributes.emplace_back("linearizedBaseContracts", getContainerIds(_node.annotation().linearizedBaseContracts));
 
-	setJsonNode(_node, "ContractDefinition", std::move(attributes));
+//	setJsonNode(_node, "ContractDefinition", std::move(attributes));//转换为module Test
 	return false;
 }
 
@@ -375,7 +380,14 @@ bool ASTJsonConverter::visit(UserDefinedValueTypeDefinition const& _node)
 
 bool ASTJsonConverter::visit(ParameterList const& _node)
 {
-	setJsonNode(_node, "ParameterList", {
+//    std::cout<<_node.get_type_information()<<endl;
+//    VariableDeclaration *temp = (VariableDeclaration *) _node.parameters();
+//    std::vector<ASTPointer<VariableDeclaration>> temp = _node.parameters();//是一个vector数组
+    for (auto i :_node.parameters())
+    {
+        i->set_variable_type_information(_node.get_type_information()) ;
+    }
+    setJsonNode(_node, "ParameterList", {
 		make_pair("parameters", toJson(_node.parameters()))
 	});
 	return false;
@@ -391,44 +403,58 @@ bool ASTJsonConverter::visit(OverrideSpecifier const& _node)
 
 bool ASTJsonConverter::visit(FunctionDefinition const& _node)
 {
+    std::cout<<"let "<<_node.name()<<" ";
+    //函数的声明直接修改为let +函数名字
 	std::vector<pair<string, Json::Value>> attributes = {
-		make_pair("name", _node.name()),
-		make_pair("nameLocation", sourceLocationToString(_node.nameLocation())),
-		make_pair("documentation", _node.documentation() ? toJson(*_node.documentation()) : Json::nullValue),
-		make_pair("kind", _node.isFree() ? "freeFunction" : TokenTraits::toString(_node.kind())),
-		make_pair("stateMutability", stateMutabilityToString(_node.stateMutability())),
-		make_pair("virtual", _node.markedVirtual()),
-		make_pair("overrides", _node.overrides() ? toJson(*_node.overrides()) : Json::nullValue),
+		make_pair("name", _node.name()),//转换为let mathadd
+        make_pair("F*","let "+_node.name()),//在functionDefinition修改的
+//		make_pair("nameLocation", sourceLocationToString(_node.nameLocation())),
+//		make_pair("documentation", _node.documentation() ? toJson(*_node.documentation()) : Json::nullValue),
+//		make_pair("kind", _node.isFree() ? "freeFunction" : TokenTraits::toString(_node.kind())),
+//		make_pair("stateMutability", stateMutabilityToString(_node.stateMutability())),
+//		make_pair("virtual", _node.markedVirtual()),
+//		make_pair("overrides", _node.overrides() ? toJson(*_node.overrides()) : Json::nullValue),
 		make_pair("parameters", toJson(_node.parameterList())),
 		make_pair("returnParameters", toJson(*_node.returnParameterList())),
-		make_pair("modifiers", toJson(_node.modifiers())),
+//		make_pair("modifiers", toJson(_node.modifiers())),
 		make_pair("body", _node.isImplemented() ? toJson(_node.body()) : Json::nullValue),
-		make_pair("implemented", _node.isImplemented()),
-		make_pair("scope", idOrNull(_node.scope()))
+//		make_pair("implemented", _node.isImplemented()),
+//		make_pair("scope", idOrNull(_node.scope()))
 	};
 
-	optional<Visibility> visibility;
-	if (_node.isConstructor())
-	{
-		if (_node.annotation().contract)
-			visibility = _node.annotation().contract->abstract() ? Visibility::Internal : Visibility::Public;
-	}
-	else
-		visibility = _node.visibility();
-
-	if (visibility)
-		attributes.emplace_back("visibility", Declaration::visibilityToString(*visibility));
-
-	if (_node.isPartOfExternalInterface() && m_stackState > CompilerStack::State::ParsedAndImported)
-		attributes.emplace_back("functionSelector", _node.externalIdentifierHex());
-	if (!_node.annotation().baseFunctions.empty())
-		attributes.emplace_back(make_pair("baseFunctions", getContainerIds(_node.annotation().baseFunctions, true)));
+//	optional<Visibility> visibility;
+//	if (_node.isConstructor())
+//	{
+//		if (_node.annotation().contract)
+//			visibility = _node.annotation().contract->abstract() ? Visibility::Internal : Visibility::Public;
+//	}
+//	else
+//		visibility = _node.visibility();
+//
+//	if (visibility)
+//		attributes.emplace_back("visibility", Declaration::visibilityToString(*visibility));
+//
+//	if (_node.isPartOfExternalInterface() && m_stackState > CompilerStack::State::ParsedAndImported)
+//		attributes.emplace_back("functionSelector", _node.externalIdentifierHex());
+//	if (!_node.annotation().baseFunctions.empty())
+//		attributes.emplace_back(make_pair("baseFunctions", getContainerIds(_node.annotation().baseFunctions, true)));
 	setJsonNode(_node, "FunctionDefinition", std::move(attributes));
 	return false;
 }
 
 bool ASTJsonConverter::visit(VariableDeclaration const& _node)
 {
+    string variable_type = _node.get_variable_type_information();//标识这个变量是参数类型还是返回值类型
+    if(variable_type.compare("parameterList") == 0){
+        std::cout<<"("<<_node.name()<<":";
+        //ASTPointer<TypeName> tmp = &(_node.typeName());
+        ASTPointer<ElementaryTypeName> tmp = std::dynamic_pointer_cast<ElementaryTypeName>(_node.typeNamePtr()) ;
+        tmp->set_typename_information("parameterList");
+    }else if(variable_type.compare("return_parameters") == 0){
+        std::cout<<":";
+        ASTPointer<ElementaryTypeName> tmp = std::dynamic_pointer_cast<ElementaryTypeName>(_node.typeNamePtr()) ;
+        tmp->set_typename_information("return_parameters");
+    }
 	std::vector<pair<string, Json::Value>> attributes = {
 		make_pair("name", _node.name()),
 		make_pair("nameLocation", sourceLocationToString(_node.nameLocation())),
@@ -439,7 +465,7 @@ bool ASTJsonConverter::visit(VariableDeclaration const& _node)
 		make_pair("storageLocation", location(_node.referenceLocation())),
 		make_pair("overrides", _node.overrides() ? toJson(*_node.overrides()) : Json::nullValue),
 		make_pair("visibility", Declaration::visibilityToString(_node.visibility())),
-		make_pair("value", _node.value() ? toJson(*_node.value()) : Json::nullValue),
+		make_pair("value------------>???", _node.value() ? toJson(*_node.value()) : Json::nullValue),
 		make_pair("scope", idOrNull(_node.scope())),
 		make_pair("typeDescriptions", typePointerToJson(_node.annotation().type, true))
 	};
@@ -516,6 +542,19 @@ bool ASTJsonConverter::visit(ErrorDefinition const& _node)
 
 bool ASTJsonConverter::visit(ElementaryTypeName const& _node)
 {
+//    std::cout<<""<<_node.typeName().toString()<<")";
+    string test_typename  = _node.typeName().toString();
+    if (test_typename.compare("uint") == 0){
+        std::cout<<""<<"int";
+    }else{
+        std::cout<<""<<_node.typeName().toString();
+    }
+
+    string typename_info = _node.get_typename_information();
+    if(typename_info.compare("parameterList")==0){
+        std::cout<<")";
+    }
+
 	std::vector<pair<string, Json::Value>> attributes = {
 		make_pair("name", _node.typeName().toString()),
 		make_pair("typeDescriptions", typePointerToJson(_node.annotation().type, true))
@@ -599,7 +638,7 @@ bool ASTJsonConverter::visit(InlineAssembly const& _node)
 bool ASTJsonConverter::visit(Block const& _node)
 {
 	setJsonNode(_node, _node.unchecked() ? "UncheckedBlock" : "Block", {
-		make_pair("statements", toJson(_node.statements()))
+		make_pair("statements", toJson(_node.statements())) //创建二元组
 	});
 	return false;
 }
@@ -674,12 +713,13 @@ bool ASTJsonConverter::visit(Break const& _node)
 	setJsonNode(_node, "Break", {});
 	return false;
 }
-
+//return 语句
 bool ASTJsonConverter::visit(Return const& _node)
 {
+    std::cout<<" = "<<endl;
 	setJsonNode(_node, "Return", {
 		make_pair("expression", toJsonOrNull(_node.expression())),
-		make_pair("functionReturnParameters", idOrNull(_node.annotation().functionReturnParameters))
+//		make_pair("functionReturnParameters", idOrNull(_node.annotation().functionReturnParameters))
 	});
 	return false;
 }
@@ -708,6 +748,8 @@ bool ASTJsonConverter::visit(RevertStatement const& _node)
 
 bool ASTJsonConverter::visit(VariableDeclarationStatement const& _node)
 {
+
+    //内部声明变量的语句
 	Json::Value varDecs(Json::arrayValue);
 	for (auto const& v: _node.declarations())
 		appendMove(varDecs, idOrNull(v.get()));
@@ -761,7 +803,7 @@ bool ASTJsonConverter::visit(TupleExpression const& _node)
 	setJsonNode(_node, "TupleExpression", std::move(attributes));
 	return false;
 }
-
+//一元操作符
 bool ASTJsonConverter::visit(UnaryOperation const& _node)
 {
 	std::vector<pair<string, Json::Value>> attributes = {
@@ -774,12 +816,20 @@ bool ASTJsonConverter::visit(UnaryOperation const& _node)
 	return false;
 }
 
+//二元操作符
 bool ASTJsonConverter::visit(BinaryOperation const& _node)
 {
+    std::cout<<"\t";//这个操作针对这个例子合适，其他例子可能不合适，因为该例子只有这一个操作符且恰好是函数体中
+    toJson(_node.leftExpression());
+    std::cout<<""<<TokenTraits::toString(_node.getOperator())<<"";
+    toJson(_node.rightExpression());
+
+
+    //左操作数，右操作数
 	std::vector<pair<string, Json::Value>> attributes = {
 		make_pair("operator", TokenTraits::toString(_node.getOperator())),
-		make_pair("leftExpression", toJson(_node.leftExpression())),
-		make_pair("rightExpression", toJson(_node.rightExpression())),
+//		make_pair("leftExpression", toJson(_node.leftExpression())),//注释之后，则不再打印操作符的左右操作数
+//		make_pair("rightExpression", toJson(_node.rightExpression())),
 		make_pair("commonType", typePointerToJson(_node.annotation().commonType)),
 	};
 	appendExpressionAttributes(attributes, _node.annotation());
@@ -874,6 +924,8 @@ bool ASTJsonConverter::visit(IndexRangeAccess const& _node)
 
 bool ASTJsonConverter::visit(Identifier const& _node)
 {
+    //标识符 函数体内部的标识符变量
+    std::cout<<""<<_node.name()<<"";
 	Json::Value overloads(Json::arrayValue);
 	for (auto const& dec: _node.annotation().overloadedDeclarations)
 		overloads.append(nodeId(*dec));
@@ -1015,3 +1067,8 @@ string ASTJsonConverter::type(VariableDeclaration const& _varDecl)
 }
 
 }
+
+
+
+
+

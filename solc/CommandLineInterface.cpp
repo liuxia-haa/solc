@@ -875,12 +875,14 @@ void CommandLineInterface::handleAst()
 	}
 	else
 	{
-		sout() << "JSON AST (compact format):" << endl << endl;
+//		sout() << "JSON AST (compact format):" << endl << endl;
+        sout() << "=================== F* ==================="<< endl;
 		for (auto const& sourceCode: m_fileReader.sourceCodes())
 		{
-			sout() << endl << "======= " << sourceCode.first << " =======" << endl;
+//			sout() << endl << "======= " << sourceCode.first << " =======" << endl;
 			ASTJsonConverter(m_compiler->state(), m_compiler->sourceIndices()).print(sout(), m_compiler->ast(sourceCode.first));
 		}
+
 	}
 }
 
